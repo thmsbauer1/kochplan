@@ -377,7 +377,7 @@ function sharedWith(r,shared){const out=[];freshSet(r).forEach(n=>{if(shared.has
 const nice=n=>n.charAt(0).toUpperCase()+n.slice(1);
 function catCount(w,skipDay){const c={veg:0,fisch:0,gefluegel:0};for(let d=0;d<7;d++){if(d===skipDay)continue;const x=w.days[d];if(x&&x.cook&&x.r&&BYKEY[x.r])c[BYKEY[x.r].c]=(c[BYKEY[x.r].c]||0)+1;}return c;}
 /* Art des Gerichts – damit nicht zwei Currys oder drei Pastas in einer Woche landen */
-const TYPES=[["curry",/curry|dal\b/i],["pasta",/pasta|spaghetti|nudeln|gnocchi/i],["bowl",/bowl/i],["salat",/salat/i],["suppe",/suppe|minestrone/i],["wrap",/wrap|taco/i],["ofen",/ofen|blech|päckchen/i],["ei",/frittata|shakshuka|puffer/i]];
+const TYPES=[["tajine",/tajine/i],["wok",/wok/i],["curry",/curry|dal\b/i],["pasta",/pasta|spaghetti|nudeln|gnocchi/i],["bowl",/bowl/i],["salat",/salat/i],["suppe",/suppe|minestrone/i],["wrap",/wrap|taco/i],["ofen",/ofen|blech|päckchen/i],["ei",/frittata|shakshuka|puffer/i],["reis",/risotto|biryani|bibimbap|reis|paella/i]];
 const typeOf=r=>{const t=TYPES.find(([,re])=>re.test(r.n));return t?t[0]:r.key;};
 function fitScore(r,w,d,opts){
   opts=opts||{};const shared=weekShared(w,d),cnt=catCount(w,d);
@@ -561,10 +561,10 @@ function ratedBy(key){const rs=ratingsOf(key);if(!rs.length)return"";return`<p c
 
 function vRezepte(){
   const q=S.q.trim().toLowerCase();
-  let rs=ALL.filter(r=>S.filter==="alle"||(S.filter==="eigene"?r.custom:S.filter==="box"?r.box:S.filter==="kind"?r.k:S.filter==="leicht"?kcal(r).portion<=550:r.c===S.filter));
+  let rs=ALL.filter(r=>S.filter==="alle"||(S.filter==="eigene"?r.custom:S.filter==="box"?r.box:S.filter==="kind"?r.k:S.filter==="leicht"?kcal(r).portion<=550:["reis","wok","tajine"].includes(S.filter)?(r.t||[]).includes(S.filter):r.c===S.filter));
   if(q)rs=rs.filter(r=>(r.n+" "+r.zz.map(z=>z.n).join(" ")).toLowerCase().includes(q));
   rs.sort((a,b)=>scoreOf(b.key)-scoreOf(a.key)||a.n.localeCompare(b.n,"de"));
-  const F=[["alle","Alle"],["veg","🥦 Vegetarisch"],["fisch","🐟 Fisch"],["gefluegel","🍗 Geflügel"],["box","🍱 Box-tauglich"],["kind","⭐ Kinderlieblinge"],["eigene","✍️ Eigene"]];
+  const F=[["alle","Alle"],["veg","🥦 Vegetarisch"],["fisch","🐟 Fisch"],["gefluegel","🍗 Geflügel"],["reis","🍚 Reis"],["wok","🥢 Wok"],["tajine","🏺 Tajine"],["box","🍱 Box-tauglich"],["kind","⭐ Kinderlieblinge"],["eigene","✍️ Eigene"]];
   if(showKcal())F.splice(1,0,["leicht","🪶 Leicht (bis 550 kcal)"]);
   let h=`<div class="row" style="margin:4px 0 10px"><h1 class="grow">Rezepte</h1><button class="btn sm" data-a="newrecipe">＋ Eigenes Rezept</button></div>`+banner();
   h+=`<input class="inp" id="q" placeholder="Suchen: Gericht oder Zutat …" value="${esc(S.q)}" autocomplete="off" style="margin-bottom:8px">`;
@@ -580,9 +580,9 @@ function sheetHTML(){
   const s=S.sheet;if(!s){lastSheet=null;return"";}let b="";
   if(s.type==="pick"){
     const w=week(),d=s.d,cur=w.days[d].r,recent=recentKeys(S.ws),used=new Set(Object.values(w.days).map(y=>y.r).filter(Boolean));
-    const F=[["alle","Alle"],["veg","🥦"],["fisch","🐟"],["gefluegel","🍗"],["box","🍱"],["eigene","✍️"]];const f=s.f||"alle";
+    const F=[["alle","Alle"],["veg","🥦"],["fisch","🐟"],["gefluegel","🍗"],["reis","🍚 Reis"],["wok","🥢 Wok"],["tajine","🏺 Tajine"],["box","🍱"],["eigene","✍️"]];const f=s.f||"alle";
     const pq=(s.q||"").trim().toLowerCase();
-    let rs=pool().filter(r=>f==="alle"||(f==="box"?r.box:f==="eigene"?r.custom:r.c===f));
+    let rs=pool().filter(r=>f==="alle"||(f==="box"?r.box:f==="eigene"?r.custom:["reis","wok","tajine"].includes(f)?(r.t||[]).includes(f):r.c===f));
     if(pq)rs=rs.filter(r=>(r.n+" "+r.zz.map(z=>z.n).join(" ")).toLowerCase().includes(pq));
     rs=rs.map(r=>({r,s:fitScore(r,w,d,{recent})-(used.has(r.key)&&r.key!==cur?3:0)})).sort((a,b)=>b.s-a.s);
     const shared=weekShared(w,d);

@@ -4,6 +4,11 @@
            el = Gramm je Esslöffel, y = Garfaktor (trockene Ware nimmt beim Kochen Wasser auf: 100 g Reis → 260 g gekocht).
    Das Ergebnis ist eine Einschätzung (etwa ±15 %), keine exakte Nährwertangabe. */
 window.NAEHRWERTE = {
+  "risottoreis":{k:350,y:2.8},"champignons":{k:22},"blumenkohl":{k:25,st:600},"garam masala":{k:300,el:6},
+  "cashewkerne":{k:580},"sojasprossen":{k:30},"gochujang":{k:200,el:20},"sesamöl":{k:884,el:10},
+  "speisestärke":{k:350,el:10},"pak choi":{k:13,st:250},"ananas in stücken":{k:60,st:340},"tomatenmark":{k:80,el:15},
+  "reisessig":{k:20,el:15},"udon-nudeln":{k:140},"spitzkohl":{k:25},"aubergine":{k:24,st:300},
+  "getrocknete aprikosen":{k:240},"ras el hanout":{k:300,el:6},"grüne oliven":{k:145},
   "avocado":{k:160,st:150},"babyspinat":{k:23},"baguette":{k:260,st:250},"balsamico":{k:90,el:15},
   "basilikum":{k:23,st:20},"basmatireis":{k:350,y:2.6},"berglinsen":{k:330,y:2.4},"brokkoli":{k:34,st:400},
   "bulgur":{k:340,y:2.5},"cherrytomaten":{k:20},"chiliflocken":{k:0},"ciabatta":{k:260,st:300},
