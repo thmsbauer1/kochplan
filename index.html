@@ -241,18 +241,18 @@ const keyOf=n=>n.toLowerCase().replace(/\s*\(.*?\)\s*/g," ").replace(/\s+/g," ")
 /* ---------- Rezepte ---------- */
 function norm(r,custom){
   const p=(r.p||[]).map(x=>Array.isArray(x)?{k:x[0],t:x[1],m:x[2]||10,h:x[3]||3}:x);
-  return Object.assign({},r,{key:custom?"c:"+r.id:r.id,custom:!!custom,zz:(r.z||[]).map(parseZ),optz:r.opt&&r.opt.z?r.opt.z.map(parseZ):[],p,s:r.s||[]});
+  return Object.assign({},r,{key:custom?"c:"+r.id:r.id,custom:!!custom,zz:(r.z||[]).map(parseZ),optz:r.opt&&r.opt.z?r.opt.z.map(parseZ):[],p,s:r.s||[],nw:r.nw||{}});
 }
 const STARTER=(window.REZEPTE||[]).map(r=>norm(r,false));
 STARTER.forEach(r=>r.zz.forEach(z=>{DEPT_DICT[z.n.toLowerCase()]=z.d;}));
 /* ---------- Kalorien (Einschätzung) ---------- */
 const NW=window.NAEHRWERTE||{},NWR=window.NAEHRWERTE_REGELN||[];
 const UNIT_G={Stk:100,Dose:240,Bund:30,Zehe:4,Scheiben:30,Pck:10,Becher:200,Glas:300,Kopf:500,Handvoll:30,Prise:.5};
-function nwOf(z){const k=keyOf(z.n);if(NW[k])return NW[k];for(const[re,v]of NWR)if(re.test(z.n))return v;if(z.d==="obst")return{k:30,st:150};return null;}
+function nwOf(z,own){const k=keyOf(z.n);if(NW[k])return NW[k];if(own&&own[k])return own[k];for(const[re,v]of NWR)if(re.test(z.n))return v;if(z.d==="obst")return{k:30,st:150};return null;}
 function gramsOf(z,v){if(z.q==null)return 0;const u=z.u||"Stk";if(u==="g"||u==="ml")return z.q;if(u==="EL")return z.q*(v.el||12);if(u==="TL")return z.q*(v.el||12)/3;if(u==="Prise")return z.q*.5;if(u==="Handvoll")return z.q*30;return z.q*(v.st||UNIT_G[u]||100);}
-function kcalOf(zz){let kc=0,g=0;const miss=[];for(const z of zz){const v=nwOf(z);if(!v){if(z.q!=null)miss.push(z.n);continue;}const gr=gramsOf(z,v);kc+=gr*v.k/100;g+=gr*(v.y||1);}return{kc,g,miss};}
+function kcalOf(zz,own){let kc=0,g=0;const miss=[];for(const z of zz){const v=nwOf(z,own);if(!v){if(z.q!=null)miss.push(z.n);continue;}const gr=gramsOf(z,v);kc+=gr*v.k/100;g+=gr*(v.y||1);}return{kc,g,miss};}
 /* je Portion (ein Drittel des Rezepts) und je 100 g fertiges Gericht */
-function kcal(r){if(r._kc)return r._kc;const a=kcalOf(r.zz),o=r.optz.length?kcalOf(r.optz):null;
+function kcal(r){if(r._kc)return r._kc;const a=kcalOf(r.zz,r.nw),o=r.optz.length?kcalOf(r.optz,r.nw):null;
   r._kc={portion:Math.round(a.kc/BASE/10)*10,per100:a.g?Math.round(a.kc/a.g*100/5)*5:null,opt:o?Math.round(o.kc/2/10)*10:0,miss:a.miss};return r._kc;}
 const showKcal=()=>!isKid();
 const kcalPill=(r,long)=>{if(!showKcal())return"";const k=kcal(r);return long?`<span class="pill kc">≈ ${k.portion} kcal/Portion</span>${k.per100?`<span class="pill kc">≈ ${k.per100} kcal/100 g</span>`:""}`:`<span>≈ ${k.portion} kcal</span>`;};
@@ -566,7 +566,7 @@ function vRezepte(){
   rs.sort((a,b)=>scoreOf(b.key)-scoreOf(a.key)||a.n.localeCompare(b.n,"de"));
   const F=[["alle","Alle"],["veg","🥦 Vegetarisch"],["fisch","🐟 Fisch"],["gefluegel","🍗 Geflügel"],["reis","🍚 Reis"],["wok","🥢 Wok"],["tajine","🏺 Tajine"],["box","🍱 Box-tauglich"],["kind","⭐ Kinderlieblinge"],["eigene","✍️ Eigene"]];
   if(showKcal())F.splice(1,0,["leicht","🪶 Leicht (bis 550 kcal)"]);
-  let h=`<div class="row" style="margin:4px 0 10px"><h1 class="grow">Rezepte</h1><button class="btn sm" data-a="newrecipe">＋ Eigenes Rezept</button></div>`+banner();
+  let h=`<div class="row" style="margin:4px 0 10px"><h1 class="grow">Rezepte</h1><button class="btn sm sec" data-a="fotorecipe" aria-label="Rezept aus Fotos">📷 Foto</button><button class="btn sm" data-a="newrecipe">＋ Eigenes</button></div>`+banner();
   h+=`<input class="inp" id="q" placeholder="Suchen: Gericht oder Zutat …" value="${esc(S.q)}" autocomplete="off" style="margin-bottom:8px">`;
   h+=`<div class="chips">${F.map(f=>`<button class="chip ${S.filter===f[0]?"on":""}" data-a="filter" data-k="${f[0]}">${f[1]}</button>`).join("")}</div>`;
   h+=`<div class="card rlist" id="rlist" style="padding:4px 12px">${rs.map(r=>{const sc=scoreOf(r.key);return`<button class="r" data-a="open" data-k="${esc(r.key)}"><div class="emo">${r.e||"🍽️"}</div><div class="grow"><b>${esc(r.n)}</b><div class="tiny muted" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">${catPill(r.c)}<span>⏱ ${r.min}′</span>${kcalPill(r)}${r.box?"<span>🍱</span>":""}${r.custom?"<span>✍️ eigenes</span>":""}${sc?`<span>${sc>0?"👍":"👎"} ${Math.abs(sc)}</span>`:""}</div></div></button>`;}).join("")||'<p class="muted small" style="padding:12px 0">Nichts gefunden.</p>'}</div>`;
@@ -620,10 +620,20 @@ function sheetHTML(){
   }
   else if(s.type==="edit"){
     const v=s.v;
+    const F=s.foto||{};
+    const fotoBox=s.id?"":`<div class="card fotobox" style="margin-bottom:6px">
+      ${window.KP_PREVIEW?`<p class="small">📷 <b>Aus Fotos ausfüllen</b> – geht in der richtigen App, nicht in dieser Vorschau.</p>`
+      :!online()?`<p class="small">📷 <b>Aus Fotos ausfüllen</b> – dafür bitte zuerst unter ⚙️ anmelden.</p>`
+      :`<label class="btn ${F.busy?"sec":""} block" style="${F.busy?"pointer-events:none;opacity:.7":""}"><input type="file" id="fotoin" accept="image/*" multiple class="hide">${F.busy?"⏳ Lese "+F.n+" Foto"+(F.n>1?"s":"")+" …":"📷 Aus Fotos ausfüllen"}</label>
+        <p class="tiny muted" style="margin-top:6px">${F.busy?"Das dauert etwa 20–40 Sekunden.":"Kochbuchseite, Zettel oder Bildschirmfoto – auch auf mehrere Fotos verteilt. Oder Zutaten auf dem Tisch, dann gibt es einen Vorschlag. Bis zu 4 Fotos."}</p>`}
+      ${F.err?`<div class="banner err" style="margin-top:8px"><span>⚠️</span><span class="small">${esc(F.err)}</span></div>`:""}
+      ${F.done?`<div class="banner" style="margin-top:8px"><span>✨</span><span class="small"><b>${F.art==="vorgeschlagen"?"Vorschlag aus euren Zutaten":"Rezept übernommen"}</b>${F.orig&&F.orig!==BASE?` – war für ${F.orig} Portionen, auf ${BASE} umgerechnet`:""}. Bitte kurz prüfen, dann speichern.${F.hinweis?"<br>"+esc(F.hinweis):""}</span></div>`:""}
+    </div>`;
     b=`<div class="sh"><h2>${s.id?"Rezept bearbeiten":"Eigenes Rezept"}</h2><button class="iconbtn" data-a="close">✕</button></div>
+    ${fotoBox}
     <form data-f="recipe">
       <label class="f">Name</label><input class="inp" name="n" required maxlength="80" value="${esc(v.n)}" placeholder="z. B. Omas Gemüsesuppe">
-      <label class="f">Symbol</label><div class="chips" style="flex-wrap:wrap">${Array.from(EMOJIS).map(e=>`<button type="button" class="chip ${v.e===e?"on":""}" data-a="emo" data-k="${e}">${e}</button>`).join("")}</div>
+      <label class="f">Symbol</label><div class="chips" style="flex-wrap:wrap">${(Array.from(EMOJIS).includes(v.e)?Array.from(EMOJIS):[v.e].concat(Array.from(EMOJIS))).map(e=>`<button type="button" class="chip ${v.e===e?"on":""}" data-a="emo" data-k="${e}">${e}</button>`).join("")}</div>
       <div class="row"><div class="grow"><label class="f">Kategorie</label><select class="inp" name="c">${Object.entries(CATS).map(([k,c])=>`<option value="${k}" ${v.c===k?"selected":""}>${c[1]} ${c[0]}</option>`).join("")}</select></div><div style="width:110px"><label class="f">Minuten</label><input class="inp" name="min" type="number" min="5" max="240" value="${esc(v.min)}"></div></div>
       <div class="row" style="margin-top:10px"><label class="mini ${v.box?"on":""}"><input type="checkbox" name="box" ${v.box?"checked":""} class="hide">🍱 Box-tauglich</label><label class="mini ${v.k?"on":""}"><input type="checkbox" name="k" ${v.k?"checked":""} class="hide">⭐ Kinderliebling</label></div>
       <label class="f">Zutaten für ${BASE} Portionen – eine pro Zeile</label><textarea class="inp" name="z" rows="7" placeholder="200 g Feta&#10;2 Stk Zucchini&#10;1 Dose Kichererbsen&#10;Salz, Pfeffer">${esc(v.z)}</textarea>
@@ -669,15 +679,18 @@ function keepSheetScroll(fn){const sh=document.querySelector(".sheet"),st=sh?sh.
 
 /* ---------- Rezept-Formular ---------- */
 function editState(r){
-  if(!r)return{n:"",e:"🍲",c:"veg",min:30,box:false,k:false,z:"",s:"",p:"",ph:""};
+  if(!r)return{n:"",e:"🍲",c:"veg",min:30,box:false,k:false,z:"",s:"",p:"",ph:"",zd:{},nw:{},pm:{}};
   const zLine=z=>(z.q!=null?fmtNum(z.q)+" "+(z.u||"Stk")+" ":"")+z.n;
-  return{n:r.n,e:r.e||"🍲",c:r.c,min:r.min,box:!!r.box,k:!!r.k,z:r.zz.map(zLine).join("\n"),s:r.s.join("\n"),p:r.p.map(p=>p.t).join("\n"),ph:r.ph||""};
+  return{n:r.n,e:r.e||"🍲",c:r.c,min:r.min,box:!!r.box,k:!!r.k,z:r.zz.map(zLine).join("\n"),s:r.s.join("\n"),p:r.p.map(p=>p.t).join("\n"),ph:r.ph||"",
+    zd:Object.fromEntries(r.zz.map(z=>[keyOf(z.n),z.d])),nw:Object.assign({},r.nw||{}),pm:Object.fromEntries(r.p.map(p=>[p.t,[p.m,p.h]]))};
 }
 function readForm(f){
   const g=n=>(f.elements[n]&&f.elements[n].value||"").trim();
   const lines=t=>t.split("\n").map(x=>x.trim()).filter(Boolean);
-  return{n:g("n"),e:S.sheet.v.e,c:g("c"),min:Math.max(5,Math.min(240,parseInt(g("min"))||30)),box:f.elements.box.checked,k:f.elements.k.checked,
-    z:lines(g("z")).map(l=>{const z=parseZ(l);return l+" @"+z.d;}),s:lines(g("s")),p:lines(g("p")).map(t=>[null,t,15,3]),ph:g("ph")};
+  const v=S.sheet.v,zd=v.zd||{},pm=v.pm||{},nw={};
+  const z=lines(g("z")).map(l=>{l=l.replace(/\s*@\w+\s*$/,"");const p=parseZ(l),k=keyOf(p.n);if(v.nw&&v.nw[k])nw[k]=v.nw[k];return l+" @"+(zd[k]||p.d);});
+  return{n:g("n"),e:v.e,c:g("c"),min:Math.max(5,Math.min(240,parseInt(g("min"))||30)),box:f.elements.box.checked,k:f.elements.k.checked,
+    z,s:lines(g("s")),p:lines(g("p")).map(t=>[null,t,(pm[t]||[])[0]||15,(pm[t]||[])[1]||3]),ph:g("ph"),nw};
 }
 async function saveRecipe(data,id){
   let c=id?S.custom.find(x=>x.id===id):null;
@@ -728,6 +741,7 @@ document.addEventListener("click",e=>{
     case"copytext":{const ta=document.getElementById("listtext");if(ta){ta.select();try{navigator.clipboard.writeText(ta.value).then(()=>toast("Liste kopiert"),()=>{});}catch(err){}}break;}
     case"filter":S.filter=k;render();break;
     case"newrecipe":S.sheet={type:"edit",v:editState(null)};render();break;
+    case"fotorecipe":S.sheet={type:"edit",v:editState(null)};render();{const fi=document.getElementById("fotoin");if(fi)fi.click();}break;
     case"editrecipe":{const r=BYKEY[k];S.sheet={type:"edit",id:r.id,v:editState(r)};render();break;}
     case"copyrecipe":{const r=BYKEY[k];const v=editState(r);v.n=r.n+" (unsere Variante)";S.sheet={type:"edit",v};render();break;}
     case"archiverecipe":{if(!confirmInline(b))break;const r=BYKEY[k];const c=S.custom.find(x=>x.id===r.id);if(c){c.archived=true;c._pending=true;rebuild();persist();
@@ -744,9 +758,40 @@ async function shareList(){
   try{await navigator.clipboard.writeText(t);toast("Liste kopiert – z. B. in Picnic oder WhatsApp einfügen");return;}catch(e){}
   S.sheet={type:"text",t};render();
 }
+/* ---------- Rezept aus Fotos (Edge Function rezept-foto) ---------- */
+function bildVerkleinern(file){
+  return new Promise((ok,fail)=>{
+    const url=URL.createObjectURL(file),img=new Image();
+    img.onload=()=>{try{const M=1568,sc=Math.min(1,M/Math.max(img.naturalWidth,img.naturalHeight));
+      const c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*sc);c.height=Math.round(img.naturalHeight*sc);
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);
+      ok({typ:"image/jpeg",daten:c.toDataURL("image/jpeg",.85).split(",")[1]});}catch(err){fail(err);}};
+    img.onerror=()=>{URL.revokeObjectURL(url);fail(new Error("Dieses Bildformat kann der Browser nicht öffnen."));};
+    img.src=url;
+  });
+}
+async function fotoLesen(files){
+  if(!S.sheet||S.sheet.type!=="edit"||!files.length)return;
+  files=files.filter(f=>/^image\//.test(f.type)||/\.(jpe?g|png|heic|heif|webp)$/i.test(f.name)).slice(0,4);
+  if(!files.length){S.sheet.foto={err:"Bitte Fotos auswählen."};render();return;}
+  const sh=S.sheet;sh.foto={busy:true,n:files.length};render();
+  try{
+    const bilder=[];for(const f of files)bilder.push(await bildVerkleinern(f));
+    const bekannt=[...new Set(ALL.flatMap(r=>r.zz.map(z=>z.n)))].sort();
+    const res=await FS.fn("rezept-foto",{bilder,bekannt});
+    if(S.sheet!==sh)return;
+    if(!res||res.art==="unklar"||!res.rezept){sh.foto={err:(res&&res.hinweis)||"Auf den Fotos war kein Rezept zu erkennen."};render();return;}
+    const r=res.rezept;
+    sh.v={n:r.n,e:r.e||"🍲",c:r.c,min:r.min,box:!!r.box,k:!!r.k,z:r.z.join("\n"),s:r.s.join("\n"),p:r.p.map(x=>x[1]).join("\n"),ph:r.ph||"",
+      zd:res.abt||{},nw:res.nw||{},pm:Object.fromEntries(r.p.map(x=>[x[1],[x[2],x[3]]]))};
+    sh.foto={done:true,art:res.art,orig:res.portionen_original,hinweis:res.hinweis};
+  }catch(err){if(S.sheet!==sh)return;sh.foto={err:netErr(err)};}
+  render();const el=document.querySelector(".sheet");if(el)el.scrollTop=0;
+}
 /* Löschen erst nach zweitem Tipp (keine Browser-Dialoge) */
 function confirmInline(b){if(b.dataset.sure)return true;b.dataset.sure="1";b.textContent="Wirklich löschen?";b.style.borderColor="var(--tomato)";b.style.color="var(--tomato)";return false;}
 function readFormSafe(f){if(!f)return{};const g=n=>f.elements[n]?f.elements[n].value:"";return{n:g("n"),c:g("c"),min:g("min"),box:f.elements.box.checked,k:f.elements.k.checked,z:g("z"),s:g("s"),p:g("p"),ph:g("ph")};}
+document.addEventListener("change",e=>{if(e.target.id==="fotoin"){fotoLesen([...e.target.files]);return;}});
 document.addEventListener("change",e=>{const t=e.target;if(t.type==="checkbox"&&t.closest("label.mini"))t.closest("label.mini").classList.toggle("on",t.checked);});
 document.addEventListener("input",e=>{if(e.target.id==="pq"&&S.sheet&&S.sheet.type==="pick"){S.sheet.q=e.target.value;const tmp=document.createElement("div");const ls0=lastSheet;tmp.innerHTML=sheetHTML();lastSheet=ls0;const n=tmp.querySelector("#plist"),o=document.getElementById("plist");if(n&&o)o.replaceWith(n);return;}
   if(e.target.id==="q"){S.q=e.target.value;const tmp=document.createElement("div");tmp.innerHTML=vRezepte();const n=tmp.querySelector("#rlist"),o=document.getElementById("rlist");if(n&&o)o.replaceWith(n);}});
