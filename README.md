@@ -22,6 +22,7 @@ Jeder Kochtag bekommt das Gericht mit der besten Passung: gemeinsame frische Zut
 
 - `index.html` – die App
 - `rezepte.js` – Grundstock (33 Gerichte, Mengen für 3 Portionen). Format steht oben in der Datei.
+- `naehrwerte.js` – ungefähre kcal je 100 g der Zutaten. Daraus rechnet die App kcal je Portion und je 100 g fertiges Gericht (Einschätzung, etwa ±15 %). Eltern sehen die Kalorien, Philip nicht.
 - `familie-sync.js` – Anmeldung, in allen Repos gleich
 
 ## Familienspeicher (Supabase)

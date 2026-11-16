@@ -67,6 +67,7 @@ header.top{padding:calc(env(safe-area-inset-top) + 14px) 0 8px;display:flex;alig
 .pill.gefluegel{background:var(--corn-soft);color:var(--corn)}
 .pill.star{background:var(--corn-soft);color:var(--corn)}
 .pill.box{background:var(--tomato-soft);color:var(--tomato)}
+.pill.kc{background:var(--soft);color:var(--ink)}
 .banner{background:var(--corn-soft);color:var(--ink);border-radius:14px;padding:10px 12px;font-size:.88rem;display:flex;gap:10px;align-items:center}
 .banner.err{background:var(--tomato-soft)}
 .summary{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 10px}
@@ -165,6 +166,7 @@ nav.tabs .badge{position:absolute;top:6px;left:calc(50% + 8px);background:var(--
 <div id="app"></div>
 <script src="familie-sync.js"></script>
 <script src="rezepte.js"></script>
+<script src="naehrwerte.js"></script>
 <script>
 "use strict";
 /* ============================================================
@@ -240,6 +242,17 @@ function norm(r,custom){
 }
 const STARTER=(window.REZEPTE||[]).map(r=>norm(r,false));
 STARTER.forEach(r=>r.zz.forEach(z=>{DEPT_DICT[z.n.toLowerCase()]=z.d;}));
+/* ---------- Kalorien (Einschätzung) ---------- */
+const NW=window.NAEHRWERTE||{},NWR=window.NAEHRWERTE_REGELN||[];
+const UNIT_G={Stk:100,Dose:240,Bund:30,Zehe:4,Scheiben:30,Pck:10,Becher:200,Glas:300,Kopf:500,Handvoll:30,Prise:.5};
+function nwOf(z){const k=keyOf(z.n);if(NW[k])return NW[k];for(const[re,v]of NWR)if(re.test(z.n))return v;if(z.d==="obst")return{k:30,st:150};return null;}
+function gramsOf(z,v){if(z.q==null)return 0;const u=z.u||"Stk";if(u==="g"||u==="ml")return z.q;if(u==="EL")return z.q*(v.el||12);if(u==="TL")return z.q*(v.el||12)/3;if(u==="Prise")return z.q*.5;if(u==="Handvoll")return z.q*30;return z.q*(v.st||UNIT_G[u]||100);}
+function kcalOf(zz){let kc=0,g=0;const miss=[];for(const z of zz){const v=nwOf(z);if(!v){if(z.q!=null)miss.push(z.n);continue;}const gr=gramsOf(z,v);kc+=gr*v.k/100;g+=gr*(v.y||1);}return{kc,g,miss};}
+/* je Portion (ein Drittel des Rezepts) und je 100 g fertiges Gericht */
+function kcal(r){if(r._kc)return r._kc;const a=kcalOf(r.zz),o=r.optz.length?kcalOf(r.optz):null;
+  r._kc={portion:Math.round(a.kc/BASE/10)*10,per100:a.g?Math.round(a.kc/a.g*100/5)*5:null,opt:o?Math.round(o.kc/2/10)*10:0,miss:a.miss};return r._kc;}
+const showKcal=()=>!isKid();
+const kcalPill=(r,long)=>{if(!showKcal())return"";const k=kcal(r);return long?`<span class="pill kc">≈ ${k.portion} kcal/Portion</span>${k.per100?`<span class="pill kc">≈ ${k.per100} kcal/100 g</span>`:""}`:`<span>≈ ${k.portion} kcal</span>`;};
 const FRESH=new Set(["obst","kuehl","fleisch","brot"]);
 const SKIP_SHARE=new Set(["zwiebel","knoblauch","rote zwiebel"]);
 function freshSet(r){return new Set(r.zz.filter(z=>FRESH.has(z.d)&&!SKIP_SHARE.has(keyOf(z.n))).map(z=>keyOf(z.n)));}
@@ -374,6 +387,7 @@ function fitScore(r,w,d,opts){
   if(d<5&&(r.min>40||r.we))s-=6;
   if(w.days[d]&&w.days[d].boxes>0&&r.box)s+=1;
   if(r.custom)s+=.5;
+  const kp=kcal(r).portion;if(kp>650)s-=1.5;else if(kp<=500)s+=.8;
   const ty=typeOf(r);for(let i=0;i<7;i++){if(i===d)continue;const x=w.days[i];if(x&&x.cook&&x.r&&BYKEY[x.r]&&typeOf(BYKEY[x.r])===ty)s-=3;}
   return s;
 }
@@ -444,8 +458,10 @@ function vWoche(){
   const cook=Object.values(w.days).filter(x=>x.cook).length,planned=Object.values(w.days).filter(x=>x.cook&&x.r).length;
   const shared=weekShared(w,-1),sharedN=[...shared.values()].filter(v=>v>1).length;
   const kid=isKid();
+  const kcs=Object.values(w.days).filter(x=>x.cook&&x.r&&BYKEY[x.r]).map(x=>kcal(BYKEY[x.r]).portion);
+  const avg=kcs.length?Math.round(kcs.reduce((a,b)=>a+b,0)/kcs.length/10)*10:0;
   let h=weekBar()+banner();
-  h+=`<div class="summary">${Object.keys(CATS).map(k=>c[k]?`<span class="pill ${k}">${CATS[k][1]} ${c[k]}× ${CATS[k][0]}</span>`:"").join("")}${boxes?`<span class="pill box">🍱 ${boxes} ${boxes>1?"Boxen":"Box"}</span>`:""}${sharedN?`<span class="pill">🔗 ${sharedN} Zutaten doppelt genutzt</span>`:""}</div>`;
+  h+=`<div class="summary">${avg&&showKcal()?`<span class="pill kc">Ø ≈ ${avg} kcal pro Abendessen</span>`:""}${Object.keys(CATS).map(k=>c[k]?`<span class="pill ${k}">${CATS[k][1]} ${c[k]}× ${CATS[k][0]}</span>`:"").join("")}${boxes?`<span class="pill box">🍱 ${boxes} ${boxes>1?"Boxen":"Box"}</span>`:""}${sharedN?`<span class="pill">🔗 ${sharedN} Zutaten doppelt genutzt</span>`:""}</div>`;
   h+=`<div class="row" style="margin-bottom:12px">${planned<cook?`<button class="btn grow" data-a="suggest">✨ ${planned?"Rest vorschlagen":"Woche vorschlagen"}</button>`:`<button class="btn sec grow" data-a="reshuffle">🔄 Neu mischen</button>`}<button class="btn ${kid?"":"sec"} grow" data-a="philip">⭐ ${kid?"Ich wähle!":"Philip wählt"}</button></div>`;
   const tIdx=S.ws===curWs()?todayIdx():-1;
   for(let d=0;d<7;d++){
@@ -454,7 +470,7 @@ function vWoche(){
     if(!x.cook)h+=`<div class="grow small muted">Kein Kochen geplant</div><button class="cookt" data-a="cook" data-d="${d}">+ kochen</button></div></div>`;
     else{
       if(r){const sh=sharedWith(r,weekShared(w,d));
-        h+=`<button class="dish" data-a="pick" data-d="${d}"><div class="emo">${r.e||"🍽️"}</div><div class="grow"><div class="nm">${esc(r.n)}</div><div class="mt">${catPill(r.c)}<span>⏱ ${r.min} Min</span>${x.philip?'<span class="pill star">⭐ Philips Wahl</span>':""}${x.lock?"<span>🔒</span>":""}</div>${sh.length?`<div class="share">🔗 teilt ${esc(sh.slice(0,3).map(nice).join(", "))}</div>`:""}</div></button>`;
+        h+=`<button class="dish" data-a="pick" data-d="${d}"><div class="emo">${r.e||"🍽️"}</div><div class="grow"><div class="nm">${esc(r.n)}</div><div class="mt">${catPill(r.c)}<span>⏱ ${r.min} Min</span>${kcalPill(r)}${x.philip?'<span class="pill star">⭐ Philips Wahl</span>':""}${x.lock?"<span>🔒</span>":""}</div>${sh.length?`<div class="share">🔗 teilt ${esc(sh.slice(0,3).map(nice).join(", "))}</div>`:""}</div></button>`;
       }else h+=`<button class="empty" data-a="pick" data-d="${d}">＋ Gericht wählen</button>`;
       h+=`</div><div class="dctl"><button class="mini on" data-a="cook" data-d="${d}" title="Kochtag an/aus">🍳 Kochen</button>`;
       if(r){
@@ -525,7 +541,7 @@ function vHeute(){
     h+=`<div class="hero"><div class="big">🧺</div><h2>${x&&x.cook?"Heute ist noch nichts geplant":"Heute wird nicht gekocht"}</h2><p class="muted small" style="margin-top:6px">${next!=null?"Als Nächstes: "+DAYL[next]+" – "+esc((BYKEY[w.days[next].r]||{n:"?"}).n):"Zeit, die nächste Woche zu planen?"}</p><div class="row" style="justify-content:center;margin-top:14px"><button class="btn" data-a="gotoweek" data-ws="${ws}">Woche ansehen</button></div></div>`;
   }else{
     const f=(BASE+(x.boxes||0))/BASE,P=buildPrep(ws),prepToday=P.sunday.filter(e=>e.items.some(it=>it.d===d)),laterToday=P.later.concat(P.eve).filter(e=>e.d===d);
-    h+=`<div class="hero"><div class="big">${r.e}</div><h2>${esc(r.n)}</h2><div class="row" style="justify-content:center;margin-top:8px">${catPill(r.c)}<span class="pill">⏱ ${r.min} Min</span>${x.boxes?`<span class="pill box">🍱 +${x.boxes} Box</span>`:""}${x.philip?'<span class="pill star">⭐ Philips Wahl</span>':""}</div></div>`;
+    h+=`<div class="hero"><div class="big">${r.e}</div><h2>${esc(r.n)}</h2><div class="row" style="justify-content:center;margin-top:8px">${catPill(r.c)}<span class="pill">⏱ ${r.min} Min</span>${kcalPill(r,true)}${x.boxes?`<span class="pill box">🍱 +${x.boxes} Box</span>`:""}${x.philip?'<span class="pill star">⭐ Philips Wahl</span>':""}</div>${showKcal()&&x.opt&&kcal(r).opt?`<p class="tiny muted" style="margin-top:6px">${esc(r.opt.l)}: +${kcal(r).opt} kcal je Portion</p>`:""}</div>`;
     if(prepToday.length||laterToday.length){h+=`<div class="sec"><h2>✅ Schon vorbereitet?</h2><div class="card" style="padding:4px 12px">`;
       for(const e of prepToday.concat(laterToday)){const on=w.prep[e.key]&&w.prep[e.key].v;h+=`<div class="item ${on?"done":""}"><button class="check ${on?"on":""}" data-a="prep" data-k="${esc(e.key)}" data-ws="${ws}">${on?"✓":""}</button><div class="it"><b>${esc(e.t)}</b></div></div>`;}
       h+=`</div></div>`;}
@@ -542,15 +558,16 @@ function ratedBy(key){const rs=ratingsOf(key);if(!rs.length)return"";return`<p c
 
 function vRezepte(){
   const q=S.q.trim().toLowerCase();
-  let rs=ALL.filter(r=>S.filter==="alle"||(S.filter==="eigene"?r.custom:S.filter==="box"?r.box:S.filter==="kind"?r.k:r.c===S.filter));
+  let rs=ALL.filter(r=>S.filter==="alle"||(S.filter==="eigene"?r.custom:S.filter==="box"?r.box:S.filter==="kind"?r.k:S.filter==="leicht"?kcal(r).portion<=550:r.c===S.filter));
   if(q)rs=rs.filter(r=>(r.n+" "+r.zz.map(z=>z.n).join(" ")).toLowerCase().includes(q));
   rs.sort((a,b)=>scoreOf(b.key)-scoreOf(a.key)||a.n.localeCompare(b.n,"de"));
   const F=[["alle","Alle"],["veg","🥦 Vegetarisch"],["fisch","🐟 Fisch"],["gefluegel","🍗 Geflügel"],["box","🍱 Box-tauglich"],["kind","⭐ Kinderlieblinge"],["eigene","✍️ Eigene"]];
+  if(showKcal())F.splice(1,0,["leicht","🪶 Leicht (bis 550 kcal)"]);
   let h=`<div class="row" style="margin:4px 0 10px"><h1 class="grow">Rezepte</h1><button class="btn sm" data-a="newrecipe">＋ Eigenes Rezept</button></div>`+banner();
   h+=`<input class="inp" id="q" placeholder="Suchen: Gericht oder Zutat …" value="${esc(S.q)}" autocomplete="off" style="margin-bottom:8px">`;
   h+=`<div class="chips">${F.map(f=>`<button class="chip ${S.filter===f[0]?"on":""}" data-a="filter" data-k="${f[0]}">${f[1]}</button>`).join("")}</div>`;
-  h+=`<div class="card rlist" id="rlist" style="padding:4px 12px">${rs.map(r=>{const sc=scoreOf(r.key);return`<button class="r" data-a="open" data-k="${esc(r.key)}"><div class="emo">${r.e||"🍽️"}</div><div class="grow"><b>${esc(r.n)}</b><div class="tiny muted" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">${catPill(r.c)}<span>⏱ ${r.min}′</span>${r.box?"<span>🍱</span>":""}${r.custom?"<span>✍️ eigenes</span>":""}${sc?`<span>${sc>0?"👍":"👎"} ${Math.abs(sc)}</span>`:""}</div></div></button>`;}).join("")||'<p class="muted small" style="padding:12px 0">Nichts gefunden.</p>'}</div>`;
-  h+=`<p class="tiny muted" style="margin:8px 4px">${ALL.length} Gerichte · Mengen für ${BASE} Portionen</p>`;
+  h+=`<div class="card rlist" id="rlist" style="padding:4px 12px">${rs.map(r=>{const sc=scoreOf(r.key);return`<button class="r" data-a="open" data-k="${esc(r.key)}"><div class="emo">${r.e||"🍽️"}</div><div class="grow"><b>${esc(r.n)}</b><div class="tiny muted" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">${catPill(r.c)}<span>⏱ ${r.min}′</span>${kcalPill(r)}${r.box?"<span>🍱</span>":""}${r.custom?"<span>✍️ eigenes</span>":""}${sc?`<span>${sc>0?"👍":"👎"} ${Math.abs(sc)}</span>`:""}</div></div></button>`;}).join("")||'<p class="muted small" style="padding:12px 0">Nichts gefunden.</p>'}</div>`;
+  h+=`<p class="tiny muted" style="margin:8px 4px">${ALL.length} Gerichte · Mengen für ${BASE} Portionen${showKcal()?" · Kalorien ungefähr, je Portion = ein Drittel des Rezepts":""}</p>`;
   return h;
 }
 
@@ -566,7 +583,7 @@ function sheetHTML(){
     b=`<div class="sh"><h2>${DAYL[d]}: Was gibt's?</h2><button class="iconbtn" data-a="close">✕</button></div>
       <div class="chips">${F.map(x=>`<button class="chip ${f===x[0]?"on":""}" data-a="pickf" data-k="${x[0]}">${x[1]} ${x[0]==="alle"?"":""}</button>`).join("")}</div>
       <p class="tiny muted" style="margin:2px 2px 8px">Oben steht, was am besten zur Woche passt (gemeinsame Zutaten, gute Mischung, eure Bewertungen).</p>`;
-    b+=rs.map(({r})=>{const sh=sharedWith(r,shared);return`<button class="pick ${r.key===cur?"cur":""}" data-a="choose" data-k="${esc(r.key)}"><div class="emo">${r.e}</div><div class="grow"><b>${esc(r.n)}</b><div class="tiny muted" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">${catPill(r.c)}<span>⏱ ${r.min}′</span>${r.box?"<span>🍱</span>":""}${used.has(r.key)&&r.key!==cur?"<span>schon in der Woche</span>":""}${recent.has(r.key)?"<span>gab's kürzlich</span>":""}</div>${sh.length?`<div class="share">🔗 teilt ${esc(sh.slice(0,3).map(nice).join(", "))}</div>`:""}</div></button>`;}).join("");
+    b+=rs.map(({r})=>{const sh=sharedWith(r,shared);return`<button class="pick ${r.key===cur?"cur":""}" data-a="choose" data-k="${esc(r.key)}"><div class="emo">${r.e}</div><div class="grow"><b>${esc(r.n)}</b><div class="tiny muted" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">${catPill(r.c)}<span>⏱ ${r.min}′</span>${kcalPill(r)}${r.box?"<span>🍱</span>":""}${used.has(r.key)&&r.key!==cur?"<span>schon in der Woche</span>":""}${recent.has(r.key)?"<span>gab's kürzlich</span>":""}</div>${sh.length?`<div class="share">🔗 teilt ${esc(sh.slice(0,3).map(nice).join(", "))}</div>`:""}</div></button>`;}).join("");
   }
   else if(s.type==="philip"){
     const w=week();
@@ -584,9 +601,10 @@ function sheetHTML(){
     const r=BYKEY[s.k];if(!r){S.sheet=null;return"";}
     const w=week(),inWeek=[...Array(7).keys()].filter(d=>w.days[d].r===r.key);
     b=`<div class="sh"><h2 class="grow">${r.e} ${esc(r.n)}</h2><button class="iconbtn" data-a="close">✕</button></div>
-      <div class="row">${catPill(r.c)}<span class="pill">⏱ ${r.min} Min</span>${r.box?'<span class="pill box">🍱 Box-tauglich</span>':""}${r.k?'<span class="pill star">⭐ Kinderliebling</span>':""}${r.custom?'<span class="pill">✍️ eigenes</span>':""}</div>
+      <div class="row">${catPill(r.c)}<span class="pill">⏱ ${r.min} Min</span>${kcalPill(r,true)}${r.box?'<span class="pill box">🍱 Box-tauglich</span>':""}${r.k?'<span class="pill star">⭐ Kinderliebling</span>':""}${r.custom?'<span class="pill">✍️ eigenes</span>':""}</div>
       <div class="sec"><h3 style="margin-bottom:6px">In die Woche (${weekLabel(S.ws).replace(/<[^>]+>/g," ").trim().split("KW")[0].trim()})</h3><div class="chips">${[...Array(7).keys()].map(d=>`<button class="chip ${inWeek.includes(d)?"on":""}" data-a="plan" data-k="${esc(r.key)}" data-d="${d}">${DAYS[d]}</button>`).join("")}</div></div>
-      <div class="sec"><h3 style="margin-bottom:6px">Zutaten für ${BASE} Portionen</h3><div class="card" style="padding:6px 14px">${r.zz.map(z=>`<div class="zl"><span>${esc(z.n)}</span><span class="muted">${esc(z.q!=null?fmtQ(z.q,z.u):"")}</span></div>`).join("")}</div>${r.opt?`<p class="tiny muted" style="margin:6px 4px">${esc(r.opt.l)}: ${r.optz.map(z=>esc(fmtQ(z.q,z.u)+" "+z.n)).join(", ")}</p>`:""}</div>
+      <div class="sec"><h3 style="margin-bottom:6px">Zutaten für ${BASE} Portionen</h3><div class="card" style="padding:6px 14px">${r.zz.map(z=>`<div class="zl"><span>${esc(z.n)}</span><span class="muted">${esc(z.q!=null?fmtQ(z.q,z.u):"")}</span></div>`).join("")}</div>${r.opt?`<p class="tiny muted" style="margin:6px 4px">${esc(r.opt.l)}: ${r.optz.map(z=>esc(fmtQ(z.q,z.u)+" "+z.n)).join(", ")}${showKcal()&&kcal(r).opt?` (+${kcal(r).opt} kcal je Portion)`:""}</p>`:""}
+      ${showKcal()?`<p class="tiny muted" style="margin:6px 4px">Kalorien sind eine Einschätzung aus den Zutaten (etwa ±15 %), Portion = ein Drittel des Rezepts.${kcal(r).miss.length?" Ohne Wert: "+esc(kcal(r).miss.join(", "))+".":""}</p>`:""}</div>
       ${r.p.length?`<div class="sec"><h3 style="margin-bottom:6px">🔪 Am Sonntag vorbereiten</h3><div class="card" style="padding:6px 14px">${r.p.map(p=>`<div class="zl"><span>${esc(p.t)}</span><span class="muted tiny">${p.m}′ · hält ${p.h} T.</span></div>`).join("")}</div></div>`:""}
       <div class="sec"><h3 style="margin-bottom:6px">👩‍🍳 So geht's</h3><div class="card" style="padding:6px 14px"><ol class="steps">${r.s.map(x=>`<li><span>${esc(x)}</span></li>`).join("")}</ol></div></div>
       ${r.ph?`<div class="sec philip"><div class="ic">🧑‍🍳</div><div><b>Philips Job</b><p class="small">${esc(r.ph)}</p></div></div>`:""}
