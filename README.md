@@ -1,0 +1,2 @@
+# kochplan
+weekly plan
