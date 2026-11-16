@@ -146,9 +146,12 @@ nav.tabs button.on i{filter:none;opacity:1}
 nav.tabs .badge{position:absolute;top:6px;left:calc(50% + 8px);background:var(--tomato);color:#fff;border-radius:999px;font-size:.62rem;padding:0 5px;line-height:1.5}
 
 /* Sheet */
-.shade{position:fixed;inset:0;background:rgba(20,14,8,.45);z-index:40;display:flex;align-items:flex-end;justify-content:center;animation:fd .15s}
-.sheet{background:var(--bg);width:100%;max-width:640px;max-height:92vh;overflow:auto;border-radius:22px 22px 0 0;padding:8px 16px calc(24px + env(safe-area-inset-bottom));animation:up .2s}
+.shade{position:fixed;inset:0;background:rgba(20,14,8,.45);z-index:40;display:flex;align-items:flex-end;justify-content:center}
+.shade.anim{animation:fd .15s}
+.sheet{background:var(--bg);width:100%;max-width:640px;max-height:92vh;overflow:auto;border-radius:22px 22px 0 0;padding:8px 16px calc(24px + env(safe-area-inset-bottom))}
+.shade.anim .sheet{animation:up .2s}
 .sheet .grab{width:42px;height:5px;border-radius:3px;background:var(--line);margin:4px auto 10px}
+.sheet .sh-search{flex-direction:column;align-items:stretch;gap:8px}
 .sheet .sh{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;position:sticky;top:-8px;background:var(--bg);padding:6px 0;z-index:2}
 @keyframes up{from{transform:translateY(40px);opacity:.4}}
 @keyframes fd{from{opacity:0}}
@@ -572,18 +575,22 @@ function vRezepte(){
 }
 
 /* ---------- Blätter (Sheets) ---------- */
+let lastSheet=null;
 function sheetHTML(){
-  const s=S.sheet;if(!s)return"";let b="";
+  const s=S.sheet;if(!s){lastSheet=null;return"";}let b="";
   if(s.type==="pick"){
     const w=week(),d=s.d,cur=w.days[d].r,recent=recentKeys(S.ws),used=new Set(Object.values(w.days).map(y=>y.r).filter(Boolean));
     const F=[["alle","Alle"],["veg","🥦"],["fisch","🐟"],["gefluegel","🍗"],["box","🍱"],["eigene","✍️"]];const f=s.f||"alle";
+    const pq=(s.q||"").trim().toLowerCase();
     let rs=pool().filter(r=>f==="alle"||(f==="box"?r.box:f==="eigene"?r.custom:r.c===f));
+    if(pq)rs=rs.filter(r=>(r.n+" "+r.zz.map(z=>z.n).join(" ")).toLowerCase().includes(pq));
     rs=rs.map(r=>({r,s:fitScore(r,w,d,{recent})-(used.has(r.key)&&r.key!==cur?3:0)})).sort((a,b)=>b.s-a.s);
     const shared=weekShared(w,d);
-    b=`<div class="sh"><h2>${DAYL[d]}: Was gibt's?</h2><button class="iconbtn" data-a="close">✕</button></div>
+    b=`<div class="sh sh-search"><div class="row" style="width:100%;flex-wrap:nowrap"><h2 class="grow">${DAYL[d]}: Was gibt's?</h2><button class="iconbtn" data-a="close">✕</button></div>
+      <input class="inp" id="pq" type="search" placeholder="🔍 Gericht oder Zutat suchen …" value="${esc(s.q||"")}" autocomplete="off" enterkeyhint="search"></div>
       <div class="chips">${F.map(x=>`<button class="chip ${f===x[0]?"on":""}" data-a="pickf" data-k="${x[0]}">${x[1]} ${x[0]==="alle"?"":""}</button>`).join("")}</div>
       <p class="tiny muted" style="margin:2px 2px 8px">Oben steht, was am besten zur Woche passt (gemeinsame Zutaten, gute Mischung, eure Bewertungen).</p>`;
-    b+=rs.map(({r})=>{const sh=sharedWith(r,shared);return`<button class="pick ${r.key===cur?"cur":""}" data-a="choose" data-k="${esc(r.key)}"><div class="emo">${r.e}</div><div class="grow"><b>${esc(r.n)}</b><div class="tiny muted" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">${catPill(r.c)}<span>⏱ ${r.min}′</span>${kcalPill(r)}${r.box?"<span>🍱</span>":""}${used.has(r.key)&&r.key!==cur?"<span>schon in der Woche</span>":""}${recent.has(r.key)?"<span>gab's kürzlich</span>":""}</div>${sh.length?`<div class="share">🔗 teilt ${esc(sh.slice(0,3).map(nice).join(", "))}</div>`:""}</div></button>`;}).join("");
+    b+=`<div id="plist">`+(rs.length?"":`<p class="muted small" style="padding:10px 2px">Nichts gefunden${pq?" für „"+esc(s.q.trim())+"“":""}.</p>`)+rs.map(({r})=>{const sh=sharedWith(r,shared);return`<button class="pick ${r.key===cur?"cur":""}" data-a="choose" data-k="${esc(r.key)}"><div class="emo">${r.e}</div><div class="grow"><b>${esc(r.n)}</b><div class="tiny muted" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">${catPill(r.c)}<span>⏱ ${r.min}′</span>${kcalPill(r)}${r.box?"<span>🍱</span>":""}${used.has(r.key)&&r.key!==cur?"<span>schon in der Woche</span>":""}${recent.has(r.key)?"<span>gab's kürzlich</span>":""}</div>${sh.length?`<div class="share">🔗 teilt ${esc(sh.slice(0,3).map(nice).join(", "))}</div>`:""}</div></button>`;}).join("")+`</div>`;
   }
   else if(s.type==="philip"){
     const w=week();
@@ -639,7 +646,8 @@ function sheetHTML(){
       b+=`<div class="card"><h3>Familienspeicher</h3><p class="small" style="margin-top:6px">Angemeldet als <b>${esc(m?m.display_name:sess.email)}</b></p><p class="small muted">${S.sync.err?esc(S.sync.err):S.sync.busy?"Gleiche ab …":t?"Zuletzt abgeglichen um "+t+" Uhr":""}</p><div class="row" style="margin-top:10px"><button class="btn sm sec" data-a="syncnow">Jetzt abgleichen</button><button class="btn sm ghost" data-a="logout">Abmelden</button></div></div>`;}
     b+=`<div class="card"><h3>So funktioniert's</h3><p class="small" style="margin-top:6px">📅 <b>Donnerstag/Freitag:</b> Woche planen – Kochtage an- und abwählen, „Woche vorschlagen“, einzelne Tage tauschen. Philip wählt ein Gericht.<br>🛒 <b>Samstag:</b> Einkaufen mit der Liste, gemeinsam abhaken.<br>🔪 <b>Sonntag:</b> Vorbereiten nach Plan.<br>🍽️ <b>Abends:</b> „Heute“ zeigt Rezept, Philips Job und die Bewertung.</p></div>`;
   }
-  return`<div class="shade" data-a="shade"><div class="sheet" role="dialog"><div class="grab"></div>${b}</div></div>`;
+  const anim=s!==lastSheet;lastSheet=s;
+  return`<div class="shade${anim?" anim":""}" data-a="shade"><div class="sheet" role="dialog"><div class="grab"></div>${b}</div></div>`;
 }
 
 /* ---------- Rendern ---------- */
@@ -695,7 +703,7 @@ document.addEventListener("click",e=>{
     case"close":case"shade":S.sheet=null;render();break;
     case"cook":{const x=week().days[d];setDay(d,{cook:!x.cook});render();break;}
     case"pick":S.sheet={type:"pick",d};render();break;
-    case"pickf":S.sheet.f=k;render();break;
+    case"pickf":S.sheet.f=k;keepSheetScroll(render);break;
     case"choose":setDay(S.sheet.d,{r:k,opt:false,philip:false});S.sheet=null;render();break;
     case"clear":setDay(d,{r:null,lock:false,philip:false,opt:false,boxes:0});render();break;
     case"lock":setDay(d,{lock:!week().days[d].lock});render();break;
@@ -740,7 +748,8 @@ async function shareList(){
 function confirmInline(b){if(b.dataset.sure)return true;b.dataset.sure="1";b.textContent="Wirklich löschen?";b.style.borderColor="var(--tomato)";b.style.color="var(--tomato)";return false;}
 function readFormSafe(f){if(!f)return{};const g=n=>f.elements[n]?f.elements[n].value:"";return{n:g("n"),c:g("c"),min:g("min"),box:f.elements.box.checked,k:f.elements.k.checked,z:g("z"),s:g("s"),p:g("p"),ph:g("ph")};}
 document.addEventListener("change",e=>{const t=e.target;if(t.type==="checkbox"&&t.closest("label.mini"))t.closest("label.mini").classList.toggle("on",t.checked);});
-document.addEventListener("input",e=>{if(e.target.id==="q"){S.q=e.target.value;const tmp=document.createElement("div");tmp.innerHTML=vRezepte();const n=tmp.querySelector("#rlist"),o=document.getElementById("rlist");if(n&&o)o.replaceWith(n);}});
+document.addEventListener("input",e=>{if(e.target.id==="pq"&&S.sheet&&S.sheet.type==="pick"){S.sheet.q=e.target.value;const tmp=document.createElement("div");const ls0=lastSheet;tmp.innerHTML=sheetHTML();lastSheet=ls0;const n=tmp.querySelector("#plist"),o=document.getElementById("plist");if(n&&o)o.replaceWith(n);return;}
+  if(e.target.id==="q"){S.q=e.target.value;const tmp=document.createElement("div");tmp.innerHTML=vRezepte();const n=tmp.querySelector("#rlist"),o=document.getElementById("rlist");if(n&&o)o.replaceWith(n);}});
 document.addEventListener("submit",async e=>{
   const f=e.target,kind=f.dataset.f;if(!kind)return;e.preventDefault();
   if(kind==="extra"){const n=f.elements.n.value.trim();if(!n)return;const id=now().toString(36);const w=week();w.extra[id]={n:n.slice(0,60),t:now()};saveWeek();render();const i=document.querySelector("form[data-f=extra] input");if(i)i.focus();}
