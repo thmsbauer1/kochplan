@@ -5,7 +5,8 @@
 
 const MODEL = "claude-sonnet-5-5";
 const MAX_PER_DAY = 20;
-const MAX_IMAGES = 4;
+const MAX_IMAGES = 10;
+const MAX_TOTAL_CHARS = 14_000_000; /* alle Bilder zusammen, etwa 10 MB */
 const MAX_IMAGE_CHARS = 2_800_000; /* base64, etwa 2 MB je Bild */
 const PORTIONEN = 3;
 
@@ -23,7 +24,7 @@ const json = (body: unknown, status = 200) =>
 
 const SYSTEM = `Du hilfst einer Familie (zwei Erwachsene, ein zehnjähriges Kind) in Deutschland, Rezepte in ihre Kochplan-App zu übernehmen.
 Du bekommst ein oder mehrere Fotos. Sie zeigen entweder
-(a) ein Rezept: Kochbuchseite, Zeitschrift, handgeschriebener Zettel, Bildschirmfoto, Verpackung – auch über mehrere Fotos verteilt (z. B. Zutaten auf einem Foto, Zubereitung auf dem nächsten), oder
+(a) ein Rezept: Kochbuchseite, Zeitschrift, handgeschriebener Zettel, Bildschirmfoto, Verpackung – auch über viele Fotos verteilt (z. B. Zutaten auf einem Foto, Zubereitung auf mehreren weiteren). Die Fotos können in beliebiger Reihenfolge kommen: Setze sie zu EINEM vollständigen Rezept zusammen und bringe die Schritte in die richtige Reihenfolge. Gehören die Fotos erkennbar zu verschiedenen Rezepten, nimm das Rezept, zu dem die meisten Fotos gehören, und nenne die übrigen im "hinweis". Oder
 (b) Lebensmittel bzw. Zutaten (Kühlschrank, Einkauf auf dem Tisch).
 Antworte ausschließlich im vorgegebenen JSON-Format.
 
@@ -54,7 +55,7 @@ Weitere Felder:
 - "min": Zeit am Kochabend in Minuten (ohne das, was am Sonntag vorbereitet werden kann).
 - "box": true, wenn es sich am nächsten Tag kalt oder aufgewärmt gut als Mittagsbox eignet.
 - "k": true, wenn Kinder es erfahrungsgemäß gern essen.
-- "s": Zubereitungsschritte, kurz und klar, höchstens 8.
+- "s": Zubereitungsschritte, kurz und klar, höchstens 12. Bei langen Rezepten zusammenfassen, aber nichts Wichtiges weglassen.
 - "p": was sich am Sonntag vorbereiten lässt (z. B. Reis vorkochen, Gemüse schneiden, Soße ansetzen), mit Minuten und wie viele Tage es im Kühlschrank hält. Leer, wenn nichts sinnvoll ist.
 - "ph": eine kleine, sichere Aufgabe für das zehnjährige Kind beim Kochen (kein scharfes Messer am Herd, kein heißes Fett).`;
 
@@ -141,6 +142,7 @@ Deno.serve(async (req) => {
     .filter((b) => MEDIA.includes(b.typ) && b.daten.length > 100 && b.daten.length <= MAX_IMAGE_CHARS && /^[A-Za-z0-9+/=]+$/.test(b.daten.slice(0, 200)));
   if (!bilder.length) return json({ error: "Kein lesbares Foto dabei." }, 400);
   if (bilder.length > MAX_IMAGES) return json({ error: `Höchstens ${MAX_IMAGES} Fotos auf einmal.` }, 400);
+  if (bilder.reduce((a, b) => a + b.daten.length, 0) > MAX_TOTAL_CHARS) return json({ error: "Die Fotos sind zusammen zu groß. Bitte weniger Fotos auf einmal." }, 400);
   const bekannt = (Array.isArray(body.bekannt) ? body.bekannt : []).map(String).filter((s) => s.length < 60).slice(0, 400);
   const notiz = String(body.notiz || "").slice(0, 300);
 
@@ -165,7 +167,7 @@ Deno.serve(async (req) => {
     method: "POST",
     headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
-      model: MODEL, max_tokens: 4000, system: SYSTEM,
+      model: MODEL, max_tokens: 6000, system: SYSTEM,
       output_config: { format: { type: "json_schema", schema: SCHEMA } },
       messages: [{ role: "user", content }],
     }),
@@ -212,7 +214,7 @@ Deno.serve(async (req) => {
       n: String(out.n || "").slice(0, 80), e: String(out.e || "🍲").slice(0, 8),
       c: ["veg", "fisch", "gefluegel"].includes(String(out.c)) ? out.c : "veg",
       min: Math.max(5, Math.min(240, Number(out.min) || 30)), box: !!out.box, k: !!out.k,
-      z: zl, s: (Array.isArray(out.s) ? out.s : []).map(String).slice(0, 10), p, ph: String(out.ph || "").slice(0, 140),
+      z: zl, s: (Array.isArray(out.s) ? out.s : []).map(String).slice(0, 14), p, ph: String(out.ph || "").slice(0, 140),
     },
     abt, nw, portionen_original: orig,
     hinweis: String(out.hinweis || "").slice(0, 500),

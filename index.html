@@ -625,7 +625,7 @@ function sheetHTML(){
       ${window.KP_PREVIEW?`<p class="small">📷 <b>Aus Fotos ausfüllen</b> – geht in der richtigen App, nicht in dieser Vorschau.</p>`
       :!online()?`<p class="small">📷 <b>Aus Fotos ausfüllen</b> – dafür bitte zuerst unter ⚙️ anmelden.</p>`
       :`<label class="btn ${F.busy?"sec":""} block" style="${F.busy?"pointer-events:none;opacity:.7":""}"><input type="file" id="fotoin" accept="image/*" multiple class="hide">${F.busy?"⏳ Lese "+F.n+" Foto"+(F.n>1?"s":"")+" …":"📷 Aus Fotos ausfüllen"}</label>
-        <p class="tiny muted" style="margin-top:6px">${F.busy?"Das dauert etwa 20–40 Sekunden.":"Kochbuchseite, Zettel oder Bildschirmfoto – auch auf mehrere Fotos verteilt. Oder Zutaten auf dem Tisch, dann gibt es einen Vorschlag. Bis zu 4 Fotos."}</p>`}
+        <p class="tiny muted" style="margin-top:6px">${F.busy?(F.n>4?"Bei so vielen Fotos dauert es bis zu einer Minute.":"Das dauert etwa 20–40 Sekunden."):"Kochbuchseite, Zettel oder Bildschirmfoto – auch auf mehrere Fotos verteilt, die Reihenfolge ist egal. Oder Zutaten auf dem Tisch, dann gibt es einen Vorschlag. Bis zu 10 Fotos."}</p>`}
       ${F.err?`<div class="banner err" style="margin-top:8px"><span>⚠️</span><span class="small">${esc(F.err)}</span></div>`:""}
       ${F.done?`<div class="banner" style="margin-top:8px"><span>✨</span><span class="small"><b>${F.art==="vorgeschlagen"?"Vorschlag aus euren Zutaten":"Rezept übernommen"}</b>${F.orig&&F.orig!==BASE?` – war für ${F.orig} Portionen, auf ${BASE} umgerechnet`:""}. Bitte kurz prüfen, dann speichern.${F.hinweis?"<br>"+esc(F.hinweis):""}</span></div>`:""}
     </div>`;
@@ -759,24 +759,26 @@ async function shareList(){
   S.sheet={type:"text",t};render();
 }
 /* ---------- Rezept aus Fotos (Edge Function rezept-foto) ---------- */
-function bildVerkleinern(file){
+const MAX_FOTOS=10;
+function bildVerkleinern(file,viele){
   return new Promise((ok,fail)=>{
     const url=URL.createObjectURL(file),img=new Image();
-    img.onload=()=>{try{const M=1568,sc=Math.min(1,M/Math.max(img.naturalWidth,img.naturalHeight));
+    img.onload=()=>{try{const M=viele?1280:1568,sc=Math.min(1,M/Math.max(img.naturalWidth,img.naturalHeight));
       const c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*sc);c.height=Math.round(img.naturalHeight*sc);
       c.getContext("2d").drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);
-      ok({typ:"image/jpeg",daten:c.toDataURL("image/jpeg",.85).split(",")[1]});}catch(err){fail(err);}};
+      ok({typ:"image/jpeg",daten:c.toDataURL("image/jpeg",viele?.8:.85).split(",")[1]});}catch(err){fail(err);}};
     img.onerror=()=>{URL.revokeObjectURL(url);fail(new Error("Dieses Bildformat kann der Browser nicht öffnen."));};
     img.src=url;
   });
 }
 async function fotoLesen(files){
   if(!S.sheet||S.sheet.type!=="edit"||!files.length)return;
-  files=files.filter(f=>/^image\//.test(f.type)||/\.(jpe?g|png|heic|heif|webp)$/i.test(f.name)).slice(0,4);
+  files=files.filter(f=>/^image\//.test(f.type)||/\.(jpe?g|png|heic|heif|webp)$/i.test(f.name));
   if(!files.length){S.sheet.foto={err:"Bitte Fotos auswählen."};render();return;}
+  if(files.length>MAX_FOTOS){S.sheet.foto={err:`Ihr habt ${files.length} Fotos ausgewählt – es gehen höchstens ${MAX_FOTOS} auf einmal. Bitte die wichtigsten auswählen (Zutaten und Zubereitung).`};render();return;}
   const sh=S.sheet;sh.foto={busy:true,n:files.length};render();
   try{
-    const bilder=[];for(const f of files)bilder.push(await bildVerkleinern(f));
+    const viele=files.length>4,bilder=[];for(const f of files)bilder.push(await bildVerkleinern(f,viele));
     const bekannt=[...new Set(ALL.flatMap(r=>r.zz.map(z=>z.n)))].sort();
     const res=await FS.fn("rezept-foto",{bilder,bekannt});
     if(S.sheet!==sh)return;
