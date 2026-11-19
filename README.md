@@ -29,7 +29,7 @@ Jeder Kochtag bekommt das Gericht mit der besten Passung: gemeinsame frische Zut
 
 Unter Rezepte → „📷 Foto“ (oder im Formular „Eigenes Rezept“): bis zu 10 Fotos (Reihenfolge egal) von einer Kochbuchseite, einem Zettel oder einem Bildschirmfoto – oder von Zutaten, dann gibt es einen Vorschlag.
 Die Edge Function `rezept-foto` (Quelltext in `supabase/functions/rezept-foto/`) liest die Fotos mit Claude, rechnet auf 3 Portionen um und liefert Abteilung und ungefähre kcal je Zutat.
-Das Formular wird vorausgefüllt und erst nach dem Prüfen gespeichert. Nur für angemeldete Familienmitglieder, höchstens 20 Mal am Tag je Person.
+Das Formular wird vorausgefüllt und erst nach dem Prüfen gespeichert. Nur für angemeldete Familienmitglieder, höchstens 100 erfolgreiche Lesungen am Tag je Person (Schutz gegen Dauerschleifen).
 Nutzt das Secret `ANTHROPIC_API_KEY` im Familienspeicher (derselbe Schlüssel wie der Rechtschreib-Tie-Break).
 
 ## Familienspeicher (Supabase)

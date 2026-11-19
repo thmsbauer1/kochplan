@@ -4,7 +4,7 @@
    Der Anthropic-Schlüssel liegt als Secret ANTHROPIC_API_KEY in Supabase, nie im Code. */
 
 const MODEL = "claude-sonnet-5-5";
-const MAX_PER_DAY = 20;
+const MAX_PER_DAY = 100; /* Schutz gegen versehentliche Dauerschleifen, gezählt werden nur erfolgreiche Lesungen */
 const MAX_IMAGES = 10;
 const MAX_TOTAL_CHARS = 14_000_000; /* alle Bilder zusammen, etwa 10 MB */
 const MAX_IMAGE_CHARS = 2_800_000; /* base64, etwa 2 MB je Bild */
@@ -150,11 +150,7 @@ Deno.serve(async (req) => {
   const start = new Date(); start.setUTCHours(0, 0, 0, 0);
   const lr = await fetch(`${SB}/rest/v1/activity_log?select=id&member_id=eq.${memberId}&kind=eq.rezept-foto&occurred_at=gte.${start.toISOString()}`, { headers: H });
   const used = lr.ok ? (await lr.json()).length : 0;
-  if (used >= MAX_PER_DAY) return json({ error: "Für heute sind genug Fotos gelesen. Morgen geht's weiter!" }, 429);
-  await fetch(`${SB}/rest/v1/activity_log`, {
-    method: "POST", headers: { ...H, Prefer: "return=minimal" },
-    body: JSON.stringify({ member_id: memberId, app: "kochplan", kind: "rezept-foto", value: { fotos: bilder.length } }),
-  });
+  if (used >= MAX_PER_DAY) return json({ error: `Heute wurden schon ${MAX_PER_DAY} Rezepte gelesen. Morgen geht's weiter!` }, 429);
 
   /* 4. KI fragen */
   const key = Deno.env.get("ANTHROPIC_API_KEY");
@@ -184,6 +180,10 @@ Deno.serve(async (req) => {
     console.error("parse", data.stop_reason, String(e));
     return json({ error: "Das Foto-Lesen geht gerade nicht." }, 502);
   }
+  await fetch(`${SB}/rest/v1/activity_log`, {
+    method: "POST", headers: { ...H, Prefer: "return=minimal" },
+    body: JSON.stringify({ member_id: memberId, app: "kochplan", kind: "rezept-foto", value: { fotos: bilder.length, art: String(out.art || "") } }),
+  });
   if (out.art === "unklar") return json({ art: "unklar", hinweis: String(out.hinweis || "Auf den Fotos war kein Rezept zu erkennen.") });
 
   /* 5. Auf 3 Portionen umrechnen, Zeilen fürs Formular bauen */
